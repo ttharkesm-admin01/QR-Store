@@ -14,7 +14,13 @@ export type Role = "STAFF" | "ADMIN";
 export type Session = { userId: number; name: string; role: Role };
 
 function secret(): string {
-  return process.env.SESSION_SECRET || "dev-insecure-secret-change-me";
+  const s = process.env.SESSION_SECRET;
+  if (s) return s;
+  // กันลืม: ห้ามใช้ค่าเริ่มต้นตอนใช้งานจริง (ไม่งั้นจะปลอม cookie เซสชันได้)
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("ต้องตั้งค่า SESSION_SECRET ก่อนใช้งานจริง (ดู .env.example)");
+  }
+  return "dev-insecure-secret-change-me";
 }
 
 // ---------- PIN ----------

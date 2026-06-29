@@ -1,4 +1,5 @@
 import { query, queryOne, tx } from "./db";
+import { hashPin, type Role } from "./auth";
 
 export type Item = {
   id: number;
@@ -8,6 +9,7 @@ export type Item = {
   unit: string;
   low_stock: number;
   note: string | null;
+  active: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -25,7 +27,7 @@ export type MovementView = {
   user_name: string;
 };
 
-export type PublicUser = { id: number; name: string; role: "STAFF" | "ADMIN" };
+export type PublicUser = { id: number; name: string; role: Role };
 
 // ข้อผิดพลาดที่อยากส่ง status code กลับไปให้ client
 export class AppError extends Error {
@@ -36,24 +38,73 @@ export class AppError extends Error {
   }
 }
 
+function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: string })?.code === "23505";
+}
+
 // ---------- users ----------
+export async function countUsers(): Promise<number> {
+  const row = await queryOne<{ n: number }>(`select count(*)::int as n from users`);
+  return row?.n ?? 0;
+}
+
 export function listPublicUsers(): Promise<PublicUser[]> {
   return query<PublicUser>(
     `select id, name, role from users where active = true order by name`,
   );
 }
 
+export async function createUser(input: {
+  name: string;
+  pin: string;
+  role: Role;
+}): Promise<PublicUser> {
+  const name = input.name.trim();
+  const pin = input.pin.trim();
+  if (!name) throw new AppError("กรุณากรอกชื่อ", 400);
+  if (!/^\d{4,8}$/.test(pin)) throw new AppError("PIN ต้องเป็นตัวเลข 4–8 หลัก", 400);
+  const row = await queryOne<PublicUser>(
+    `insert into users (name, pin_hash, role)
+     values ($1, $2, $3) returning id, name, role`,
+    [name, hashPin(pin), input.role === "ADMIN" ? "ADMIN" : "STAFF"],
+  );
+  return row!;
+}
+
+// ปิดการใช้งานผู้ใช้ (ไม่ลบจริง เพื่อรักษาประวัติการเบิก)
+export async function deactivateUser(id: number): Promise<void> {
+  await query(`update users set active = false where id = $1`, [id]);
+}
+
+export async function countActiveAdmins(): Promise<number> {
+  const row = await queryOne<{ n: number }>(
+    `select count(*)::int as n from users where active = true and role = 'ADMIN'`,
+  );
+  return row?.n ?? 0;
+}
+
+export async function getUserRole(id: number): Promise<Role | null> {
+  const row = await queryOne<{ role: Role }>(
+    `select role from users where id = $1 and active = true`,
+    [id],
+  );
+  return row?.role ?? null;
+}
+
 // ---------- items ----------
 export function listItems(): Promise<Item[]> {
-  return query<Item>(`select * from items order by name`);
+  return query<Item>(`select * from items where active = true order by name`);
 }
 
 export function getItemById(id: number): Promise<Item | null> {
-  return queryOne<Item>(`select * from items where id = $1`, [id]);
+  return queryOne<Item>(`select * from items where id = $1 and active = true`, [id]);
 }
 
 export function getItemByCode(code: string): Promise<Item | null> {
-  return queryOne<Item>(`select * from items where code = $1`, [code]);
+  return queryOne<Item>(
+    `select * from items where code = $1 and active = true`,
+    [code],
+  );
 }
 
 export async function createItem(input: {
@@ -64,21 +115,24 @@ export async function createItem(input: {
   low_stock: number;
   note?: string | null;
 }): Promise<Item> {
-  const existing = await getItemByCode(input.code);
-  if (existing) throw new AppError("รหัส (code) นี้มีอยู่แล้ว", 409);
-  const row = await queryOne<Item>(
-    `insert into items (code, name, quantity, unit, low_stock, note)
-     values ($1,$2,$3,$4,$5,$6) returning *`,
-    [
-      input.code,
-      input.name,
-      input.quantity,
-      input.unit,
-      input.low_stock,
-      input.note ?? null,
-    ],
-  );
-  return row!;
+  try {
+    const row = await queryOne<Item>(
+      `insert into items (code, name, quantity, unit, low_stock, note)
+       values ($1,$2,$3,$4,$5,$6) returning *`,
+      [
+        input.code,
+        input.name,
+        input.quantity,
+        input.unit,
+        input.low_stock,
+        input.note ?? null,
+      ],
+    );
+    return row!;
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new AppError("รหัส (code) นี้มีอยู่แล้ว", 409);
+    throw err;
+  }
 }
 
 export async function updateItem(
@@ -91,24 +145,26 @@ export async function updateItem(
     note?: string | null;
   },
 ): Promise<Item> {
-  const clash = await queryOne<{ id: number }>(
-    `select id from items where code = $1 and id <> $2`,
-    [input.code, id],
-  );
-  if (clash) throw new AppError("รหัส (code) นี้มีอยู่แล้ว", 409);
-  const row = await queryOne<Item>(
-    `update items set code=$1, name=$2, unit=$3, low_stock=$4, note=$5, updated_at=now()
-     where id=$6 returning *`,
-    [input.code, input.name, input.unit, input.low_stock, input.note ?? null, id],
-  );
-  if (!row) throw new AppError("ไม่พบรายการนี้", 404);
-  return row;
+  try {
+    const row = await queryOne<Item>(
+      `update items set code=$1, name=$2, unit=$3, low_stock=$4, note=$5, updated_at=now()
+       where id=$6 and active=true returning *`,
+      [input.code, input.name, input.unit, input.low_stock, input.note ?? null, id],
+    );
+    if (!row) throw new AppError("ไม่พบรายการนี้", 404);
+    return row;
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new AppError("รหัส (code) นี้มีอยู่แล้ว", 409);
+    throw err;
+  }
 }
 
+// archive รายการ (เก็บประวัติการเบิกไว้)
 export async function deleteItem(id: number): Promise<void> {
-  const res = await query(`delete from items where id = $1`, [id]);
-  // pg ไม่คืน rows จาก delete; ไม่ต้องเช็คก็ได้
-  void res;
+  await query(
+    `update items set active = false, updated_at = now() where id = $1`,
+    [id],
+  );
 }
 
 // ---------- การตัดสต็อก (เบิกของ) แบบ atomic ----------
@@ -122,23 +178,20 @@ export async function withdraw(
     throw new AppError("จำนวนต้องเป็นจำนวนเต็มมากกว่า 0", 400);
   }
   return tx(async (client) => {
-    // ตัดสต็อกเฉพาะเมื่อมีของพอ — กันสต็อกติดลบในคำสั่งเดียว
+    // ตัดสต็อกเฉพาะเมื่อมีของพอ + ยัง active — กันสต็อกติดลบในคำสั่งเดียว
     const upd = await client.query<Item>(
       `update items set quantity = quantity - $1, updated_at = now()
-       where id = $2 and quantity >= $1
+       where id = $2 and active = true and quantity >= $1
        returning *`,
       [qty, itemId],
     );
     if (upd.rowCount === 0) {
       const exists = await client.query<{ quantity: number }>(
-        `select quantity from items where id = $1`,
+        `select quantity from items where id = $1 and active = true`,
         [itemId],
       );
       if (exists.rowCount === 0) throw new AppError("ไม่พบรายการนี้", 404);
-      throw new AppError(
-        `สต็อกไม่พอ (คงเหลือ ${exists.rows[0].quantity})`,
-        409,
-      );
+      throw new AppError(`สต็อกไม่พอ (คงเหลือ ${exists.rows[0].quantity})`, 409);
     }
     await client.query(
       `insert into movements (item_id, user_id, delta, type, note)
@@ -162,13 +215,13 @@ export async function adjustStock(
   return tx(async (client) => {
     const upd = await client.query<Item>(
       `update items set quantity = quantity + $1, updated_at = now()
-       where id = $2 and quantity + $1 >= 0
+       where id = $2 and active = true and quantity + $1 >= 0
        returning *`,
       [delta, itemId],
     );
     if (upd.rowCount === 0) {
       const exists = await client.query<{ quantity: number }>(
-        `select quantity from items where id = $1`,
+        `select quantity from items where id = $1 and active = true`,
         [itemId],
       );
       if (exists.rowCount === 0) throw new AppError("ไม่พบรายการนี้", 404);

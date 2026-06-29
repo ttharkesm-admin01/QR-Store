@@ -21,6 +21,7 @@ export default function QrScanner({
     (async () => {
       try {
         const { Html5Qrcode } = await import("html5-qrcode");
+        if (stopped) return; // ถูก unmount ระหว่างโหลดไลบรารี
         scanner = new Html5Qrcode(containerId.current, { verbose: false });
         await scanner.start(
           { facingMode: "environment" },
@@ -38,6 +39,10 @@ export default function QrScanner({
             /* ไม่เจอ QR ในเฟรมนี้ — ปกติ ไม่ต้องทำอะไร */
           },
         );
+        if (stopped) {
+          // ถูก unmount ระหว่างกล้องกำลังเริ่ม — ปิดกล้องทันที
+          scanner.stop().catch(() => {});
+        }
       } catch {
         setError(
           "เปิดกล้องไม่ได้ — ตรวจสอบสิทธิ์กล้อง หรือใช้ช่องกรอกรหัสด้านล่างแทน",

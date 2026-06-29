@@ -23,12 +23,20 @@ export default function Nav({ session }: { session: Session }) {
             ประวัติ
           </Link>
           {session.role === "ADMIN" && (
-            <Link
-              href="/items"
-              className="rounded-lg px-3 py-1.5 text-slate-700 hover:bg-slate-100"
-            >
-              จัดการของ
-            </Link>
+            <>
+              <Link
+                href="/items"
+                className="rounded-lg px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+              >
+                จัดการของ
+              </Link>
+              <Link
+                href="/users"
+                className="rounded-lg px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+              >
+                ผู้ใช้
+              </Link>
+            </>
           )}
           <span className="ml-1 hidden text-slate-400 sm:inline">|</span>
           <span className="hidden px-2 text-slate-500 sm:inline">

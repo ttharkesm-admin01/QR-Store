@@ -10,7 +10,11 @@ const TYPE_LABEL: Record<MovementView["type"], string> = {
 
 function toCsv(rows: MovementView[]): string {
   const header = ["วันเวลา", "รายการ", "รหัส", "ประเภท", "จำนวน", "ผู้ทำรายการ", "หมายเหตุ"];
-  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const esc = (v: string) => {
+    // กัน CSV formula injection: ถ้าขึ้นต้นด้วย = + - @ ให้ใส่ ' นำหน้า (Excel/Sheets จะไม่รันเป็นสูตร)
+    const safe = /^[=+\-@]/.test(v) ? `'${v}` : v;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
   const lines = rows.map((m) =>
     [
       new Date(m.created_at).toLocaleString("th-TH"),

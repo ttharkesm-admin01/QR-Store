@@ -6,10 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "db:init": "node --env-file=.env scripts/init-db.mjs",
-    "db:seed": "node --env-file=.env scripts/seed.mjs",
-    "db:setup": "npm run db:init && npm run db:seed"
+    "lint": "eslint"
   },
   "dependencies": {
     "html5-qrcode": "^2.3.8",

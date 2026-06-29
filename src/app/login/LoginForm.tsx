@@ -57,7 +57,7 @@ export default function LoginForm({ users }: { users: PublicUser[] }) {
         ))}
         {users.length === 0 && (
           <p className="col-span-2 text-center text-sm text-slate-500">
-            ยังไม่มีผู้ใช้ — รัน <code>npm run db:seed</code> ก่อน
+            ยังไม่มีผู้ใช้ในระบบ
           </p>
         )}
       </div>

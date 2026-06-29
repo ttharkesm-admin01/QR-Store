@@ -1,4 +1,5 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
+import { SCHEMA_SQL } from "./schema";
 
 // ใช้ Pool เดียวต่อ process (เลี่ยงสร้างหลายตัวตอน hot-reload ของ Next dev)
 const globalForDb = globalThis as unknown as { pool?: Pool };
@@ -20,6 +21,21 @@ function createPool() {
 
 export const pool: Pool = globalForDb.pool ?? createPool();
 if (process.env.NODE_ENV !== "production") globalForDb.pool = pool;
+
+// สร้างตารางอัตโนมัติครั้งแรก (idempotent) — ทำให้ deploy ขึ้นคลาวด์ได้โดยไม่ต้องรันสคริปต์ในเครื่อง
+let schemaPromise: Promise<void> | null = null;
+export function ensureSchema(): Promise<void> {
+  if (!schemaPromise) {
+    schemaPromise = pool
+      .query(SCHEMA_SQL)
+      .then(() => undefined)
+      .catch((err) => {
+        schemaPromise = null; // ให้ลองใหม่ได้ถ้าครั้งนี้ล้มเหลว
+        throw err;
+      });
+  }
+  return schemaPromise;
+}
 
 export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { ensureSchema } from "@/lib/db";
 import { listPublicUsers } from "@/lib/data";
 import LoginForm from "./LoginForm";
 
@@ -7,7 +8,10 @@ export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
   if (await getSession()) redirect("/");
+  await ensureSchema();
   const users = await listPublicUsers();
+  // ฐานข้อมูลใหม่ที่ยังไม่มีผู้ใช้ → ไปหน้าตั้งค่าครั้งแรก
+  if (users.length === 0) redirect("/setup");
   return (
     <main className="flex flex-1 items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-sm">
