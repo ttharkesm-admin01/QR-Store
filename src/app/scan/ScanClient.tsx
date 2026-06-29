@@ -1,14 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import QrScanner from "@/components/QrScanner";
 import type { Item } from "@/lib/data";
 
 type Stage = "scanning" | "review" | "done";
 
-export default function ScanClient() {
+// รับได้ทั้ง URL (เช่น https://.../scan?code=A4-001) และรหัสล้วน (A4-001)
+function extractCode(text: string): string {
+  const t = text.trim();
+  try {
+    const u = new URL(t);
+    const c = u.searchParams.get("code");
+    if (c) return c.trim();
+  } catch {
+    /* ไม่ใช่ URL — ใช้เป็นรหัสตรง ๆ */
+  }
+  return t;
+}
+
+export default function ScanClient({ initialCode }: { initialCode?: string }) {
   const [stage, setStage] = useState<Stage>("scanning");
+  const [cameraOn, setCameraOn] = useState(false);
   const [scannerKey, setScannerKey] = useState(0);
   const [item, setItem] = useState<Item | null>(null);
   const [qty, setQty] = useState(1);
@@ -18,6 +32,8 @@ export default function ScanClient() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState("");
 
+  const lookupRef = useRef<(code: string) => void>(() => {});
+
   function rescan() {
     setItem(null);
     setQty(1);
@@ -25,23 +41,23 @@ export default function ScanClient() {
     setManual("");
     setError("");
     setResult("");
+    setCameraOn(false);
     setStage("scanning");
-    setScannerKey((k) => k + 1);
   }
 
-  async function lookup(code: string) {
-    const trimmed = code.trim();
-    if (!trimmed) return;
+  async function lookup(raw: string) {
+    const code = extractCode(raw);
+    if (!code) return;
     setBusy(true);
     setError("");
     try {
       const res = await fetch(
-        `/api/items/lookup?code=${encodeURIComponent(trimmed)}`,
+        `/api/items/lookup?code=${encodeURIComponent(code)}`,
       );
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "ไม่พบรายการ");
-        setScannerKey((k) => k + 1); // เริ่มสแกนใหม่
+        if (cameraOn) setScannerKey((k) => k + 1); // เริ่มสแกนกล้องใหม่
         return;
       }
       setItem(data);
@@ -49,11 +65,21 @@ export default function ScanClient() {
       setStage("review");
     } catch {
       setError("เชื่อมต่อไม่ได้");
-      setScannerKey((k) => k + 1);
+      if (cameraOn) setScannerKey((k) => k + 1);
     } finally {
       setBusy(false);
     }
   }
+  lookupRef.current = lookup;
+
+  // มากับลิงก์ที่มี ?code= (สแกนด้วยกล้องมือถือ) → ค้นหาให้อัตโนมัติ ไม่ต้องเปิดกล้องในเว็บ
+  const did = useRef(false);
+  useEffect(() => {
+    if (initialCode && !did.current) {
+      did.current = true;
+      lookupRef.current(initialCode);
+    }
+  }, [initialCode]);
 
   async function confirm() {
     if (!item) return;
@@ -175,7 +201,7 @@ export default function ScanClient() {
             onClick={rescan}
             className="rounded-xl py-2 text-slate-600 hover:bg-slate-100"
           >
-            ยกเลิก / สแกนใหม่
+            ยกเลิก / เบิกรายการอื่น
           </button>
         </div>
       </div>
@@ -185,15 +211,13 @@ export default function ScanClient() {
   // stage === "scanning"
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
-        <QrScanner key={scannerKey} onScan={lookup} />
-        <p className="mt-3 text-center text-sm text-slate-500">
-          เล็ง QR ให้อยู่ในกรอบ ถือห่าง ~15–20 ซม. ในที่สว่าง
-        </p>
+      <div className="rounded-2xl bg-teal-50 p-4 text-sm text-teal-800">
+        💡 วิธีที่ง่ายที่สุด: ใช้ <b>กล้องถ่ายรูปของมือถือ</b> สแกน QR ที่ติดไว้ที่ของ
+        แล้วแตะลิงก์ที่ขึ้นมา ระบบจะพามาที่หน้าเบิกของชิ้นนั้นทันที
       </div>
 
       <div className="rounded-2xl bg-white p-4 shadow-sm">
-        <p className="mb-2 text-sm text-slate-500">หรือกรอกรหัสเอง</p>
+        <p className="mb-2 text-sm text-slate-500">หรือกรอกรหัสของเอง</p>
         <div className="flex gap-2">
           <input
             value={manual}
@@ -210,6 +234,34 @@ export default function ScanClient() {
             ค้นหา
           </button>
         </div>
+      </div>
+
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        {cameraOn ? (
+          <>
+            <QrScanner key={scannerKey} onScan={lookup} />
+            <p className="mt-3 text-center text-sm text-slate-500">
+              เล็ง QR ให้อยู่ในกรอบ ถือห่าง ~15–20 ซม. ในที่สว่าง
+            </p>
+            <button
+              onClick={() => setCameraOn(false)}
+              className="mt-2 w-full rounded-lg py-2 text-sm text-slate-500 hover:bg-slate-100"
+            >
+              ปิดกล้อง
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => {
+              setError("");
+              setScannerKey((k) => k + 1);
+              setCameraOn(true);
+            }}
+            className="w-full rounded-xl border border-slate-200 py-4 font-medium text-slate-700 hover:border-teal-400 hover:bg-teal-50"
+          >
+            📷 หรือเปิดกล้องสแกนในหน้านี้
+          </button>
+        )}
       </div>
 
       {error && (

@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PublicUser } from "@/lib/data";
 
-export default function LoginForm({ users }: { users: PublicUser[] }) {
+export default function LoginForm({
+  users,
+  next = "/",
+}: {
+  users: PublicUser[];
+  next?: string;
+}) {
   const router = useRouter();
   const [selected, setSelected] = useState<PublicUser | null>(null);
   const [pin, setPin] = useState("");
@@ -28,7 +34,7 @@ export default function LoginForm({ users }: { users: PublicUser[] }) {
         setPin("");
         return;
       }
-      router.replace("/");
+      router.replace(next);
       router.refresh();
     } catch {
       setError("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง");

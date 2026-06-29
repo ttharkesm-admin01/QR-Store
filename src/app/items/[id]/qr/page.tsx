@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import QRCode from "qrcode";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { getItemById } from "@/lib/data";
@@ -18,7 +19,19 @@ export default async function QrPage({
   const item = await getItemById(id);
   if (!item) notFound();
 
-  const dataUrl = await QRCode.toDataURL(item.code, { width: 600, margin: 1 });
+  // เข้ารหัส QR เป็น "ลิงก์" เข้าหน้าเบิกของรายการนี้ — สแกนด้วยกล้องปกติของมือถือ
+  // (โดยเฉพาะ iPhone) ก็เปิดเข้าแอปได้เลย ไม่ต้องพึ่งกล้องในเว็บ
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+  const proto =
+    h.get("x-forwarded-proto") ??
+    (/localhost|127\.0\.0\.1/.test(host) ? "http" : "https");
+  const codeParam = encodeURIComponent(item.code);
+  const scanUrl = host
+    ? `${proto}://${host}/scan?code=${codeParam}`
+    : `/scan?code=${codeParam}`;
+
+  const dataUrl = await QRCode.toDataURL(scanUrl, { width: 600, margin: 1 });
 
   return (
     <main className="mx-auto w-full max-w-md flex-1 px-4 py-8">
@@ -47,7 +60,7 @@ export default async function QrPage({
         <h1 className="mt-4 text-xl font-bold">{item.name}</h1>
         <p className="mt-1 font-mono text-slate-500">{item.code}</p>
         <p className="mt-2 text-sm text-slate-400">
-          สแกนเพื่อเบิก · หน่วย: {item.unit}
+          สแกนด้วยกล้องมือถือเพื่อเปิดหน้าเบิก · หน่วย: {item.unit}
         </p>
       </div>
 
