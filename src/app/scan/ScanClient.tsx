@@ -188,7 +188,7 @@ export default function ScanClient() {
       <div className="rounded-2xl bg-white p-4 shadow-sm">
         <QrScanner key={scannerKey} onScan={lookup} />
         <p className="mt-3 text-center text-sm text-slate-500">
-          เล็ง QR ของรายการที่ต้องการเบิก
+          เล็ง QR ให้อยู่ในกรอบ ถือห่าง ~15–20 ซม. ในที่สว่าง
         </p>
       </div>
 

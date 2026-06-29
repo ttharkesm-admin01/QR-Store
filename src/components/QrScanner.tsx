@@ -22,10 +22,19 @@ export default function QrScanner({
       try {
         const { Html5Qrcode } = await import("html5-qrcode");
         if (stopped) return; // ถูก unmount ระหว่างโหลดไลบรารี
-        scanner = new Html5Qrcode(containerId.current, { verbose: false });
+        scanner = new Html5Qrcode(containerId.current, {
+          verbose: false,
+          // ใช้ตัวอ่านบาร์โค้ดในตัวเบราว์เซอร์ถ้ามี (เร็ว/แม่นกว่าบนมือถือมาก)
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        });
+        // กรอบสแกนยืดตามขนาดจอ (ราว 70% ของด้านสั้น) — จ่อแล้วจับ QR ง่ายขึ้น
+        const qrbox = (vw: number, vh: number) => {
+          const size = Math.max(160, Math.floor(Math.min(vw, vh) * 0.7));
+          return { width: size, height: size };
+        };
         await scanner.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 240, height: 240 } },
+          { fps: 10, qrbox },
           (decoded) => {
             if (stopped) return;
             stopped = true;
