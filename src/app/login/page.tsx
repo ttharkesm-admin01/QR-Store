@@ -6,8 +6,16 @@ import LoginForm from "./LoginForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
-  if (await getSession()) redirect("/");
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const nextRaw = (await searchParams).next ?? "";
+  // อนุญาตเฉพาะ path ภายใน (กัน open redirect)
+  const next =
+    nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/";
+  if (await getSession()) redirect(next);
   await ensureSchema();
   const users = await listPublicUsers();
   // ฐานข้อมูลใหม่ที่ยังไม่มีผู้ใช้ → ไปหน้าตั้งค่าครั้งแรก
@@ -21,7 +29,7 @@ export default async function LoginPage() {
             เลือกชื่อของคุณเพื่อเริ่มเบิกของ
           </p>
         </div>
-        <LoginForm users={users} />
+        <LoginForm users={users} next={next} />
       </div>
     </main>
   );
