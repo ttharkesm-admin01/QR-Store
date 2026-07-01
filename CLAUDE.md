@@ -33,7 +33,9 @@ src/components/      Nav, QrScanner, LogoutButton
    ไม่ใช่รหัสล้วน — เพื่อให้กล้องปกติของมือถือสแกนแล้วเปิดเข้าแอปได้
 3. **html5-qrcode live camera ทำ Safari iPhone ล่ม** — วิธีหลักคือ deep-link (ข้อ 2) +
    โหมด "ถ่ายรูป QR" (`<input capture>` + `scanFile`) ไม่ใช้ video stream; live camera เป็น opt-in
-4. **SESSION_SECRET จำเป็นใน production** — `secret()` throw ถ้าไม่ตั้ง (กันปลอม cookie)
+4. **SESSION_SECRET ไม่บังคับ** — ถ้าไม่ตั้ง `secret()` จะ derive จาก `DATABASE_URL` (เสถียร/เดายาก)
+   ห้ามให้ `secret()` throw หรือ `getSession()` throw — จะทำหน้าเว็บพัง ("โหลดหน้าไม่สำเร็จ");
+   `getSession()` ต้อง try/catch คืน null เสมอเมื่ออ่านไม่สำเร็จ
 5. **Soft-delete items** (`active` + partial unique index `on items(code) where active`) —
    ห้ามลบจริง/CASCADE ไม่งั้นประวัติการเบิก (movements) หาย; FK เป็น `on delete restrict`
 6. **searchParams อาจเป็น `string[]`** (พารามิเตอร์ซ้ำ) — ต้อง normalize ก่อน `.trim()`/`.startsWith()` (ไม่งั้น 500)
