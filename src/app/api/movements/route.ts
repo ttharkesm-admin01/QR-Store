@@ -32,25 +32,32 @@ function toCsv(rows: MovementView[]): string {
 }
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "ยังไม่ได้เข้าสู่ระบบ" }, { status: 401 });
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "ยังไม่ได้เข้าสู่ระบบ" }, { status: 401 });
+    }
 
-  const sp = new URL(req.url).searchParams;
-  const rows = await listMovements({
-    itemId: sp.get("itemId") ? Number(sp.get("itemId")) : undefined,
-    userId: sp.get("userId") ? Number(sp.get("userId")) : undefined,
-    from: sp.get("from") || undefined,
-    to: sp.get("to") || undefined,
-    limit: sp.get("format") === "csv" ? 5000 : 200,
-  });
-
-  if (sp.get("format") === "csv") {
-    return new NextResponse(toCsv(rows), {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="movements-${Date.now()}.csv"`,
-      },
+    const sp = new URL(req.url).searchParams;
+    const rows = await listMovements({
+      itemId: sp.get("itemId") ? Number(sp.get("itemId")) : undefined,
+      userId: sp.get("userId") ? Number(sp.get("userId")) : undefined,
+      from: sp.get("from") || undefined,
+      to: sp.get("to") || undefined,
+      limit: sp.get("format") === "csv" ? 5000 : 200,
     });
+
+    if (sp.get("format") === "csv") {
+      return new NextResponse(toCsv(rows), {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="movements-${Date.now()}.csv"`,
+        },
+      });
+    }
+    return NextResponse.json(rows);
+  } catch (err) {
+    console.error("[movements] error:", (err as Error).message);
+    return NextResponse.json({ error: "ระบบขัดข้องชั่วคราว" }, { status: 500 });
   }
-  return NextResponse.json(rows);
 }
