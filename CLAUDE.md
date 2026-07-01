@@ -13,6 +13,8 @@ UI ภาษาไทย เปิดผ่านมือถือได้ (PW
 - PostgreSQL ผ่าน `pg` (SQL ตรง ไม่มี ORM) — ตารางสร้างอัตโนมัติด้วย `ensureSchema()`
 - `html5-qrcode` (อ่าน QR) · `qrcode` (สร้าง QR)
 - Auth: PIN hash ด้วย scrypt + session เป็น cookie เซ็น HMAC (ใช้ `node:crypto` ล้วน)
+- ❗ **ไม่ได้ใช้**: Prisma, ORM, JWT/jsonwebtoken, bcrypt, NextAuth, JWT_SECRET, NEXTAUTH_* — อย่าเข้าใจผิด
+  (คน/AI มักเดาว่าใช้ของพวกนี้ — ยืนยันด้วย `grep` ก่อนเสมอ)
 
 ## โครงสร้าง
 ```
@@ -45,10 +47,23 @@ src/components/      Nav, QrScanner, LogoutButton
 7. **`next` redirect กัน open-redirect**: อนุญาตเฉพาะ `^/(?![/\\])` (กัน `//evil`, `/\evil`)
 8. **ห้ามใช้ `next/font/google`** — ดึงฟอนต์ตอน build ทำ build ล่มในเน็ตจำกัด; ใช้ system font
 9. **withdraw/adjust ต้อง atomic** — `update ... where quantity >= $qty returning *` ในทรานแซกชันเดียว กันสต็อกติดลบ
+10. **ทุก API route ครอบ `try/catch` คืน `{ error }` JSON** (ไม่ปล่อย 500 ดิบ) — `/api/auth/login`
+    มี log บอกสาเหตุ 401 ฝั่ง server: `[login] 401: PIN ไม่ถูกต้อง` vs `ไม่พบผู้ใช้` vs `สำเร็จ`
+    (log userId/ชื่อได้ **แต่ห้าม log PIN/รหัสผ่าน**)
+11. **SSL WARNING ของ pg = ไม่กระทบการทำงาน** — `db.ts` ตัด `sslmode` ออกจาก connection string
+    แล้วคุม SSL ผ่าน option (`ssl:{rejectUnauthorized:false}` เมื่อไม่ใช่ localhost) เพื่อลบ warning
+    (การตัดด้วย `new URL()` ปลอดภัย: pg percent-decode รหัสผ่านกลับเท่าเดิม)
+
+## 🐛 Debug อาการยอดฮิต (map อาการ → สาเหตุ)
+- **"This page couldn't load" (error ดิบเบราว์เซอร์)** = serverless ล่ม → เช็ค pg pool `on('error')` (ข้อ 1)
+- **"โหลดหน้าไม่สำเร็จ" (error boundary เรา)** = หน้า throw ตอน render → เช็ค `getSession`/`secret` (ข้อ 4)
+  หรือ client throw (เช่น `scanner.stop()` ข้อ 3) — ดู Browser Console (F12) ให้เห็น error จริง
+- **login 401** = **PIN ที่กรอกไม่ตรง (ปกติ ไม่ใช่บั๊ก)** — ยืนยันจาก Vercel log `[login]`
+- หลัง deploy แล้วยังพัง = **แคช JS เก่า** → hard refresh (Ctrl+Shift+R) / InPrivate
 
 ## Deploy (cloud-only, ไม่ต้องรันในเครื่อง)
-- Neon: สร้าง DB → เอา connection string (pooled, `?sslmode=require`)
-- Vercel: import repo (branch `main`) → ตั้ง env `DATABASE_URL` + `SESSION_SECRET` → Deploy
+- Neon: สร้าง DB → เอา connection string (แนะนำ **pooled**, host มี `-pooler`)
+- Vercel: import repo (branch `main`) → ตั้ง env **`DATABASE_URL` ตัวเดียวพอ** (`SESSION_SECRET` optional) → Deploy
 - เปิดลิงก์ → หน้า `/setup` สร้าง admin คนแรก (atomic, ใช้ได้ครั้งเดียว) → เมนู "ผู้ใช้" เพิ่ม staff
 - ตารางสร้างอัตโนมัติตอนรันครั้งแรก (ไม่มี migration script)
 
