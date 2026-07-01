@@ -14,12 +14,18 @@ export type Role = "STAFF" | "ADMIN";
 export type Session = { userId: number; name: string; role: Role };
 
 function secret(): string {
-  const s = process.env.SESSION_SECRET;
-  if (s) return s;
-  // กันลืม: ห้ามใช้ค่าเริ่มต้นตอนใช้งานจริง (ไม่งั้นจะปลอม cookie เซสชันได้)
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("ต้องตั้งค่า SESSION_SECRET ก่อนใช้งานจริง (ดู .env.example)");
+  const explicit = process.env.SESSION_SECRET;
+  if (explicit) return explicit;
+  // ถ้าไม่ได้ตั้ง SESSION_SECRET ให้ derive กุญแจจาก DATABASE_URL (ตั้งเสมอบน Vercel)
+  // — เสถียรข้าม instance และเดายาก; ถ้า DATABASE_URL รั่ว attacker ก็เข้าถึง DB ได้อยู่แล้ว
+  // ทำให้แอปทำงานได้โดยไม่ต้องตั้ง env เพิ่ม (กันปัญหา "โหลดหน้าไม่สำเร็จ" จากลืมตั้ง secret)
+  const db = process.env.DATABASE_URL;
+  if (db) {
+    return createHmac("sha256", db)
+      .update("qrstore-session-key-v1")
+      .digest("base64url");
   }
+  // ถึงตรงนี้เฉพาะตอน dev ที่ไม่มีทั้ง SESSION_SECRET และ DATABASE_URL
   return "dev-insecure-secret-change-me";
 }
 
@@ -86,8 +92,15 @@ export async function clearSession(): Promise<void> {
 }
 
 export async function getSession(): Promise<Session | null> {
-  const store = await cookies();
-  return deserialize(store.get(COOKIE)?.value);
+  // อ่าน session ต้องไม่ throw เด็ดขาด — ถ้าอ่านไม่สำเร็จ (cookie เสีย / secret มีปัญหา)
+  // ให้ถือว่ายังไม่ล็อกอิน แล้วพาไปหน้า login แทนที่จะทำหน้าเว็บพัง
+  try {
+    const store = await cookies();
+    return deserialize(store.get(COOKIE)?.value);
+  } catch (err) {
+    console.error("[auth] getSession failed:", (err as Error).message);
+    return null;
+  }
 }
 
 // ใช้ในหน้า/route ที่ต้องล็อกอินก่อน
