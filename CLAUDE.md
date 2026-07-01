@@ -33,6 +33,9 @@ src/components/      Nav, QrScanner, LogoutButton
    ไม่ใช่รหัสล้วน — เพื่อให้กล้องปกติของมือถือสแกนแล้วเปิดเข้าแอปได้
 3. **html5-qrcode live camera ทำ Safari iPhone ล่ม** — วิธีหลักคือ deep-link (ข้อ 2) +
    โหมด "ถ่ายรูป QR" (`<input capture>` + `scanFile`) ไม่ใช้ video stream; live camera เป็น opt-in
+   ⚠️ `scanner.stop()`/`clear()` **throw แบบ synchronous** ถ้ากล้องไม่ได้กำลังทำงาน
+   ("Cannot stop, scanner is not running or paused.") — `.catch()` ดักไม่ทัน ต้องครอบ `try/catch`
+   (ดู `safeStop()` ใน QrScanner.tsx) ไม่งั้น throw หลุดไปทำทั้งหน้าเว็บพัง
 4. **SESSION_SECRET ไม่บังคับ** — ถ้าไม่ตั้ง `secret()` จะ derive จาก `DATABASE_URL` (เสถียร/เดายาก)
    ห้ามให้ `secret()` throw หรือ `getSession()` throw — จะทำหน้าเว็บพัง ("โหลดหน้าไม่สำเร็จ");
    `getSession()` ต้อง try/catch คืน null เสมอเมื่ออ่านไม่สำเร็จ
