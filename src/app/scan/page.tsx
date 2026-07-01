@@ -8,9 +8,10 @@ export const dynamic = "force-dynamic";
 export default async function ScanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ code?: string }>;
+  searchParams: Promise<{ code?: string | string[] }>;
 }) {
-  const code = (await searchParams).code?.trim() ?? "";
+  const raw = (await searchParams).code;
+  const code = (Array.isArray(raw) ? raw[0] : raw)?.trim() ?? "";
   const session = await getSession();
   if (!session) {
     // ยังไม่ล็อกอิน — ไป login แล้วกลับมาที่ลิงก์เดิม (รองรับการสแกนด้วยกล้องมือถือ)
