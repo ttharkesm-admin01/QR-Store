@@ -16,11 +16,26 @@ function createPool() {
       process.env.PGSSL !== "false")
       ? { rejectUnauthorized: false }
       : undefined;
-  return new Pool({ connectionString, ssl });
+  const p = new Pool({
+    connectionString,
+    ssl,
+    // Neon free tier: อย่าเปิด connection เยอะ + ปิด idle เร็วก่อน Neon ตัดทิ้ง
+    max: Number(process.env.PG_POOL_MAX ?? 3),
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 10_000,
+    keepAlive: true,
+  });
+  // สำคัญมากบน serverless/Neon: ถ้า idle client พังแล้วไม่มี handler
+  // Node จะถือเป็น uncaught exception แล้ว process ล่ม → "This page couldn't load"
+  p.on("error", (err) => {
+    console.error("[pg] idle client error (จัดการแล้ว ไม่ให้ล่ม):", err.message);
+  });
+  return p;
 }
 
+// cache pool ทั้ง dev และ prod เพื่อ reuse ข้าม warm invocation ของ serverless
 export const pool: Pool = globalForDb.pool ?? createPool();
-if (process.env.NODE_ENV !== "production") globalForDb.pool = pool;
+globalForDb.pool = pool;
 
 // สร้างตารางอัตโนมัติครั้งแรก (idempotent) — ทำให้ deploy ขึ้นคลาวด์ได้โดยไม่ต้องรันสคริปต์ในเครื่อง
 let schemaPromise: Promise<void> | null = null;
