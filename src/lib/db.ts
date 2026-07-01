@@ -5,17 +5,26 @@ import { SCHEMA_SQL } from "./schema";
 const globalForDb = globalThis as unknown as { pool?: Pool };
 
 function createPool() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) {
     throw new Error("ไม่ได้ตั้งค่า DATABASE_URL (ดูตัวอย่างใน .env.example)");
   }
   // Neon และผู้ให้บริการคลาวด์ส่วนใหญ่ต้องใช้ SSL; localhost ไม่ต้อง
+  const isLocal = /localhost|127\.0\.0\.1/.test(raw);
   const ssl =
-    /sslmode=require/.test(connectionString) ||
-    (!/localhost|127\.0\.0\.1/.test(connectionString) &&
-      process.env.PGSSL !== "false")
+    !isLocal && process.env.PGSSL !== "false"
       ? { rejectUnauthorized: false }
       : undefined;
+  // คุม SSL ผ่าน option ด้านบนเอง แล้วตัด sslmode ออกจาก string
+  // เพื่อไม่ให้ pg ขึ้น deprecation warning (SSL WARNING) — ไม่กระทบการทำงานจริง
+  let connectionString = raw;
+  try {
+    const u = new URL(raw);
+    u.searchParams.delete("sslmode");
+    connectionString = u.toString();
+  } catch {
+    /* string แปลก ๆ — ใช้ค่าเดิม */
+  }
   const p = new Pool({
     connectionString,
     ssl,
