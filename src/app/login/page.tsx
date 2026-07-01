@@ -9,12 +9,13 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string | string[] }>;
 }) {
-  const nextRaw = (await searchParams).next ?? "";
-  // อนุญาตเฉพาะ path ภายใน (กัน open redirect)
-  const next =
-    nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/";
+  const nextParam = (await searchParams).next;
+  const nextRaw = Array.isArray(nextParam) ? (nextParam[0] ?? "") : (nextParam ?? "");
+  // อนุญาตเฉพาะ path ภายในที่ขึ้นต้น "/" และตัวถัดไปไม่ใช่ / หรือ \
+  // (กัน open redirect เช่น //evil.com หรือ /\evil.com ที่บางเบราว์เซอร์แปลงเป็น protocol-relative)
+  const next = /^\/(?![/\\])/.test(nextRaw) ? nextRaw : "/";
   if (await getSession()) redirect(next);
   await ensureSchema();
   const users = await listPublicUsers();

@@ -90,13 +90,12 @@ export default function ScanClient({ initialCode }: { initialCode?: string }) {
     setBusy(true);
     setError("");
     const el = document.createElement("div");
+    el.id = `qr-file-${Date.now()}`;
     el.style.display = "none";
     document.body.appendChild(el);
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
-      const el2 = el as HTMLDivElement & { id: string };
-      el2.id = `qr-file-${Date.now()}`;
-      const reader = new Html5Qrcode(el2.id, { verbose: false });
+      const reader = new Html5Qrcode(el.id, { verbose: false });
       const decoded = await reader.scanFile(file, false);
       try {
         reader.clear();
