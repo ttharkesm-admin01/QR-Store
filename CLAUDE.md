@@ -31,8 +31,10 @@ src/components/      Nav, QrScanner, LogoutButton
 1. **pg Pool ต้องมี `pool.on('error')`** — Neon ตัด idle connection ทิ้ง; ถ้าไม่มี handler
    Node จะถือเป็น uncaught exception → **serverless ล่ม → "This page couldn't load"** (ล่มเป็นบางครั้ง)
    ตั้ง `max` ต่ำ (~3), `idleTimeoutMillis`, และ cache pool บน globalThis ทั้ง dev/prod
-2. **QR ต้องเข้ารหัสเป็น URL** `${origin}/scan?code=<code>` (origin จาก request headers)
-   ไม่ใช่รหัสล้วน — เพื่อให้กล้องปกติของมือถือสแกนแล้วเปิดเข้าแอปได้
+2. **QR เข้ารหัสเป็น URL เสมอ** (origin จาก request headers ไม่ใช่รหัสล้วน) — เพื่อให้กล้องมือถือเปิดแอปได้
+   - **หลัก**: QR รวมอันเดียว `/qr` เข้ารหัส `${origin}/scan` → สแกนแล้ว **เลือกรายการจากลิสต์เอง**
+     (พนักงานไม่อยากติด QR ทุกชิ้น) — `/scan` (ไม่มี ?code) แสดง item picker + ค้นหา
+   - **เสริม**: QR รายชิ้น `/items/[id]/qr` เข้ารหัส `${origin}/scan?code=<code>` → auto-lookup รายการนั้น
 3. **html5-qrcode live camera ทำ Safari iPhone ล่ม** — วิธีหลักคือ deep-link (ข้อ 2) +
    โหมด "ถ่ายรูป QR" (`<input capture>` + `scanFile`) ไม่ใช้ video stream; live camera เป็น opt-in
    ⚠️ `scanner.stop()`/`clear()` **throw แบบ synchronous** ถ้ากล้องไม่ได้กำลังทำงาน
