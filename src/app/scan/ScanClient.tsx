@@ -5,7 +5,7 @@ import Link from "next/link";
 import QrScanner from "@/components/QrScanner";
 import type { Item } from "@/lib/data";
 
-type Stage = "scanning" | "review" | "done";
+type Stage = "picking" | "review" | "done";
 
 // รับได้ทั้ง URL (เช่น https://.../scan?code=A4-001) และรหัสล้วน (A4-001)
 function extractCode(text: string): string {
@@ -20,9 +20,18 @@ function extractCode(text: string): string {
   return t;
 }
 
-export default function ScanClient({ initialCode }: { initialCode?: string }) {
-  const [stage, setStage] = useState<Stage>("scanning");
+export default function ScanClient({
+  initialCode,
+  items,
+}: {
+  initialCode?: string;
+  items: Item[];
+}) {
+  const [stage, setStage] = useState<Stage>("picking");
+  const [list, setList] = useState<Item[]>(items);
+  const [q, setQ] = useState(""); // คำค้นหาในลิสต์
   const [cameraOn, setCameraOn] = useState(false);
+  const [showScan, setShowScan] = useState(false); // ซ่อน/แสดงตัวเลือกสแกน QR รายชิ้น
   const [scannerKey, setScannerKey] = useState(0);
   const [item, setItem] = useState<Item | null>(null);
   const [qty, setQty] = useState(1);
@@ -35,15 +44,27 @@ export default function ScanClient({ initialCode }: { initialCode?: string }) {
   const lookupRef = useRef<(code: string) => void>(() => {});
   const fileRef = useRef<HTMLInputElement>(null);
 
+  async function refreshList() {
+    try {
+      const res = await fetch("/api/items");
+      if (res.ok) setList(await res.json());
+    } catch {
+      /* ใช้ลิสต์เดิม */
+    }
+  }
+
   function rescan() {
     setItem(null);
     setQty(1);
     setNote("");
     setManual("");
+    setQ("");
     setError("");
     setResult("");
     setCameraOn(false);
-    setStage("scanning");
+    setShowScan(false);
+    setStage("picking");
+    refreshList(); // ดึงสต็อกล่าสุด
   }
 
   async function lookup(raw: string) {
@@ -58,7 +79,7 @@ export default function ScanClient({ initialCode }: { initialCode?: string }) {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "ไม่พบรายการ");
-        if (cameraOn) setScannerKey((k) => k + 1); // เริ่มสแกนกล้องใหม่
+        if (cameraOn) setScannerKey((k) => k + 1);
         return;
       }
       setItem(data);
@@ -73,7 +94,7 @@ export default function ScanClient({ initialCode }: { initialCode?: string }) {
   }
   lookupRef.current = lookup;
 
-  // มากับลิงก์ที่มี ?code= (สแกนด้วยกล้องมือถือ) → ค้นหาให้อัตโนมัติ ไม่ต้องเปิดกล้องในเว็บ
+  // มากับลิงก์ที่มี ?code= (สแกน QR รายชิ้น) → ค้นหาให้อัตโนมัติ
   const did = useRef(false);
   useEffect(() => {
     if (initialCode && !did.current) {
@@ -85,7 +106,7 @@ export default function ScanClient({ initialCode }: { initialCode?: string }) {
   // ถ่ายรูป QR แล้วถอดรหัสจากรูป — เสถียรบน iPhone (ไม่ใช้ video stream ต่อเนื่อง)
   async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้
+    e.target.value = "";
     if (!file) return;
     setBusy(true);
     setError("");
@@ -176,7 +197,7 @@ export default function ScanClient({ initialCode }: { initialCode?: string }) {
           <p className="mb-2 text-sm text-slate-500">จำนวนที่เบิก</p>
           <div className="flex items-center justify-center gap-4">
             <button
-              onClick={() => setQty((q) => Math.max(1, q - 1))}
+              onClick={() => setQty((n) => Math.max(1, n - 1))}
               className="h-12 w-12 rounded-full bg-slate-100 text-2xl hover:bg-slate-200"
             >
               −
@@ -191,7 +212,7 @@ export default function ScanClient({ initialCode }: { initialCode?: string }) {
               className="w-20 rounded-lg border border-slate-300 py-2 text-center text-2xl"
             />
             <button
-              onClick={() => setQty((q) => q + 1)}
+              onClick={() => setQty((n) => n + 1)}
               className="h-12 w-12 rounded-full bg-slate-100 text-2xl hover:bg-slate-200"
             >
               +
@@ -231,89 +252,68 @@ export default function ScanClient({ initialCode }: { initialCode?: string }) {
             onClick={rescan}
             className="rounded-xl py-2 text-slate-600 hover:bg-slate-100"
           >
-            ยกเลิก / เบิกรายการอื่น
+            ← เลือกรายการอื่น
           </button>
         </div>
       </div>
     );
   }
 
-  // stage === "scanning"
+  // stage === "picking"
+  const keyword = q.trim().toLowerCase();
+  const filtered = keyword
+    ? list.filter(
+        (i) =>
+          i.name.toLowerCase().includes(keyword) ||
+          i.code.toLowerCase().includes(keyword),
+      )
+    : list;
+
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl bg-teal-50 p-4 text-sm text-teal-800">
-        💡 วิธีที่ง่ายที่สุด: ใช้ <b>กล้องถ่ายรูปของมือถือ</b> สแกน QR ที่ติดไว้ที่ของ
-        แล้วแตะลิงก์ที่ขึ้นมา ระบบจะพามาที่หน้าเบิกของชิ้นนั้นทันที
-      </div>
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="ค้นหาชื่อของหรือรหัส…"
+        className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-teal-500 focus:outline-none"
+      />
 
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
-        <p className="mb-2 text-sm text-slate-500">หรือกรอกรหัสของเอง</p>
-        <div className="flex gap-2">
-          <input
-            value={manual}
-            onChange={(e) => setManual(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && lookup(manual)}
-            placeholder="เช่น PEN-001"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2"
-          />
-          <button
-            onClick={() => lookup(manual)}
-            disabled={busy}
-            className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white disabled:opacity-50"
-          >
-            ค้นหา
-          </button>
-        </div>
-      </div>
-
-      <div className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={onPhoto}
-        />
-        <button
-          onClick={() => {
-            setError("");
-            fileRef.current?.click();
-          }}
-          disabled={busy}
-          className="w-full rounded-xl bg-teal-600 py-3 font-medium text-white disabled:opacity-50"
-        >
-          📷 ถ่ายรูป QR เพื่อสแกน
-        </button>
-        <p className="text-center text-xs text-slate-400">
-          รองรับ iPhone/Android — เปิดกล้องถ่าย QR หนึ่งรูปแล้วระบบอ่านให้
-        </p>
-
-        {cameraOn ? (
-          <>
-            <QrScanner key={scannerKey} onScan={lookup} />
-            <p className="text-center text-sm text-slate-500">
-              เล็ง QR ให้อยู่ในกรอบ ถือห่าง ~15–20 ซม. ในที่สว่าง
-            </p>
-            <button
-              onClick={() => setCameraOn(false)}
-              className="w-full rounded-lg py-2 text-sm text-slate-500 hover:bg-slate-100"
-            >
-              ปิดกล้อง
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => {
-              setError("");
-              setScannerKey((k) => k + 1);
-              setCameraOn(true);
-            }}
-            className="w-full rounded-lg border border-slate-200 py-2 text-sm text-slate-500 hover:bg-slate-100"
-          >
-            หรือเปิดกล้องสแกนต่อเนื่อง (บางรุ่นอาจไม่รองรับ)
-          </button>
-        )}
+      <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+        <ul className="divide-y divide-slate-100">
+          {filtered.map((it) => {
+            const low = it.quantity <= it.low_stock;
+            return (
+              <li key={it.id}>
+                <button
+                  onClick={() => lookup(it.code)}
+                  disabled={busy}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-teal-50 disabled:opacity-50"
+                >
+                  <span>
+                    <span className="font-medium">{it.name}</span>
+                    <span className="block text-xs text-slate-400">
+                      {it.code}
+                    </span>
+                  </span>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-sm ${
+                      low
+                        ? "bg-rose-50 font-medium text-rose-600"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    เหลือ {it.quantity} {it.unit}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+          {filtered.length === 0 && (
+            <li className="px-4 py-6 text-center text-sm text-slate-400">
+              {list.length === 0 ? "ยังไม่มีรายการของ" : "ไม่พบรายการที่ค้นหา"}
+            </li>
+          )}
+        </ul>
       </div>
 
       {error && (
@@ -321,6 +321,79 @@ export default function ScanClient({ initialCode }: { initialCode?: string }) {
           {error}
         </p>
       )}
+
+      {/* ทางเลือกเสริม: สแกน QR รายชิ้น (ถ้ามีติดไว้) */}
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        {!showScan ? (
+          <button
+            onClick={() => setShowScan(true)}
+            className="w-full text-center text-sm text-slate-500 hover:text-teal-700"
+          >
+            หรือสแกน QR รายชิ้น / กรอกรหัสเอง
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                value={manual}
+                onChange={(e) => setManual(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && lookup(manual)}
+                placeholder="กรอกรหัส เช่น PEN-001"
+                className="flex-1 rounded-lg border border-slate-300 px-3 py-2"
+              />
+              <button
+                onClick={() => lookup(manual)}
+                disabled={busy}
+                className="rounded-lg bg-teal-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+              >
+                ค้นหา
+              </button>
+            </div>
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={onPhoto}
+            />
+            <button
+              onClick={() => {
+                setError("");
+                fileRef.current?.click();
+              }}
+              disabled={busy}
+              className="w-full rounded-lg border border-slate-200 py-2 text-sm text-slate-600 hover:border-teal-400 hover:bg-teal-50 disabled:opacity-50"
+            >
+              📷 ถ่ายรูป QR เพื่อสแกน
+            </button>
+
+            {cameraOn ? (
+              <>
+                <QrScanner key={scannerKey} onScan={lookup} />
+                <button
+                  onClick={() => setCameraOn(false)}
+                  className="w-full rounded-lg py-2 text-sm text-slate-500 hover:bg-slate-100"
+                >
+                  ปิดกล้อง
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  setError("");
+                  setScannerKey((k) => k + 1);
+                  setCameraOn(true);
+                }}
+                className="w-full rounded-lg py-2 text-sm text-slate-400 hover:bg-slate-100"
+              >
+                เปิดกล้องสแกนต่อเนื่อง
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

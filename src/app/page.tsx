@@ -21,7 +21,7 @@ export default async function Home() {
           href="/scan"
           className="mb-6 flex items-center justify-center gap-3 rounded-2xl bg-teal-600 px-6 py-8 text-xl font-semibold text-white shadow-sm hover:bg-teal-700"
         >
-          📷 สแกน QR เพื่อเบิกของ
+          ➖ เบิกของ (เลือกรายการ)
         </Link>
 
         <div className="mb-6 grid grid-cols-2 gap-3">
