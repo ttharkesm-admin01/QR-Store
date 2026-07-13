@@ -29,8 +29,10 @@ export default function HistoryClient({
     const p = new URLSearchParams();
     if (itemId) p.set("itemId", itemId);
     if (userId) p.set("userId", userId);
-    if (from) p.set("from", from);
-    if (to) p.set("to", `${to}T23:59:59`);
+    // แปลงเป็น ISO (UTC) จากเที่ยงคืนตามเวลาเครื่องผู้ใช้ — ถ้าส่งวันที่ล้วน
+    // Postgres จะตีความเป็นเที่ยงคืน UTC ทำให้ขอบเขตวันคลาดไป 7 ชม. สำหรับเวลาไทย
+    if (from) p.set("from", new Date(`${from}T00:00:00`).toISOString());
+    if (to) p.set("to", new Date(`${to}T23:59:59.999`).toISOString());
     return p;
   }
 

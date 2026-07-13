@@ -6,6 +6,7 @@ import {
   timingSafeEqual,
   createHmac,
 } from "node:crypto";
+import { queryOne } from "./db";
 
 const COOKIE = "qrstore_session";
 const MAX_AGE = 60 * 60 * 12; // 12 ชั่วโมง
@@ -92,11 +93,21 @@ export async function clearSession(): Promise<void> {
 }
 
 export async function getSession(): Promise<Session | null> {
-  // อ่าน session ต้องไม่ throw เด็ดขาด — ถ้าอ่านไม่สำเร็จ (cookie เสีย / secret มีปัญหา)
+  // อ่าน session ต้องไม่ throw เด็ดขาด — ถ้าอ่านไม่สำเร็จ (cookie เสีย / secret มีปัญหา / DB ล่ม)
   // ให้ถือว่ายังไม่ล็อกอิน แล้วพาไปหน้า login แทนที่จะทำหน้าเว็บพัง
   try {
     const store = await cookies();
-    return deserialize(store.get(COOKIE)?.value);
+    const session = deserialize(store.get(COOKIE)?.value);
+    if (!session) return null;
+    // ยืนยันกับ DB ทุกครั้ง: ผู้ใช้ที่ถูกปิดการใช้งานต้องหลุดทันที
+    // (cookie เป็น HMAC ล้วน ถ้าไม่เช็คตรงนี้จะใช้ได้ต่ออีก 12 ชม. จน cookie หมดอายุ)
+    // และใช้ role ล่าสุดจาก DB แทนค่าที่ค้างอยู่ใน cookie
+    const row = await queryOne<{ role: Role }>(
+      `select role from users where id = $1 and active = true`,
+      [session.userId],
+    );
+    if (!row) return null;
+    return { ...session, role: row.role };
   } catch (err) {
     console.error("[auth] getSession failed:", (err as Error).message);
     return null;
