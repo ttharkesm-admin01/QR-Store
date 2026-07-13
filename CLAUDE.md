@@ -52,7 +52,13 @@ src/components/      Nav, QrScanner, LogoutButton
 10. **ทุก API route ครอบ `try/catch` คืน `{ error }` JSON** (ไม่ปล่อย 500 ดิบ) — `/api/auth/login`
     มี log บอกสาเหตุ 401 ฝั่ง server: `[login] 401: PIN ไม่ถูกต้อง` vs `ไม่พบผู้ใช้` vs `สำเร็จ`
     (log userId/ชื่อได้ **แต่ห้าม log PIN/รหัสผ่าน**)
-11. **SSL WARNING ของ pg = ไม่กระทบการทำงาน** — `db.ts` ตัด `sslmode` ออกจาก connection string
+11. **`getSession()` ยืนยัน active + role กับ DB ทุก request** — ปิดการใช้งานผู้ใช้แล้วต้องหลุดทันที
+    (cookie เป็น HMAC ล้วน ถ้าเช็คแค่ลายเซ็นจะใช้ต่อได้อีก 12 ชม.) · login มี lockout:
+    PIN ผิด 5 ครั้งติด → ล็อก 15 นาที (คอลัมน์ `failed_logins`/`locked_until` — เพิ่มใน DB เดิม
+    ด้วย `alter table ... add column if not exists` ใน schema.ts, `create table if not exists` อย่างเดียวไม่พอ)
+12. **เวลา/timezone ต้องคุมเอง (server บน Vercel = UTC)** — CSV export ใส่ `timeZone: "Asia/Bangkok"`;
+    ฟิลเตอร์วันที่หน้า history ให้ client แปลงเป็น ISO จากเวลา local ก่อนส่ง (ห้ามส่งวันที่ล้วน)
+13. **SSL WARNING ของ pg = ไม่กระทบการทำงาน** — `db.ts` ตัด `sslmode` ออกจาก connection string
     แล้วคุม SSL ผ่าน option (`ssl:{rejectUnauthorized:false}` เมื่อไม่ใช่ localhost) เพื่อลบ warning
     (การตัดด้วย `new URL()` ปลอดภัย: pg percent-decode รหัสผ่านกลับเท่าเดิม)
 

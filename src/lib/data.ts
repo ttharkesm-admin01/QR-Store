@@ -72,23 +72,26 @@ export async function createUser(input: {
 }
 
 // ปิดการใช้งานผู้ใช้ (ไม่ลบจริง เพื่อรักษาประวัติการเบิก)
-export async function deactivateUser(id: number): Promise<void> {
-  await query(`update users set active = false where id = $1`, [id]);
-}
-
-export async function countActiveAdmins(): Promise<number> {
-  const row = await queryOne<{ n: number }>(
-    `select count(*)::int as n from users where active = true and role = 'ADMIN'`,
-  );
-  return row?.n ?? 0;
-}
-
-export async function getUserRole(id: number): Promise<Role | null> {
-  const row = await queryOne<{ role: Role }>(
-    `select role from users where id = $1 and active = true`,
+// เช็ค "ห้ามปิด ADMIN ที่ active คนสุดท้าย" ใน statement เดียวกับ update
+// — ถ้าแยกเช็คก่อนแล้วค่อย update สอง admin ที่ปิดกันเองพร้อมกันอาจเหลือ admin ศูนย์คน
+export async function deactivateUser(
+  id: number,
+): Promise<"ok" | "not_found" | "last_admin"> {
+  const row = await queryOne<{ id: number }>(
+    `update users set active = false
+     where id = $1 and active = true
+       and (role <> 'ADMIN'
+            or exists (select 1 from users
+                       where active = true and role = 'ADMIN' and id <> $1))
+     returning id`,
     [id],
   );
-  return row?.role ?? null;
+  if (row) return "ok";
+  const user = await queryOne<{ id: number }>(
+    `select id from users where id = $1 and active = true`,
+    [id],
+  );
+  return user ? "last_admin" : "not_found";
 }
 
 // ---------- items ----------

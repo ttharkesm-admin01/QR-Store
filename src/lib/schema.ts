@@ -10,6 +10,11 @@ create table if not exists users (
   created_at timestamptz not null default now()
 );
 
+-- กัน brute-force PIN: นับครั้งที่ใส่ผิด + เวลาปลดล็อก
+-- (ตารางเดิมอาจถูกสร้างไปแล้ว จึงต้อง add column if not exists)
+alter table users add column if not exists failed_logins integer not null default 0;
+alter table users add column if not exists locked_until timestamptz;
+
 create table if not exists items (
   id         serial primary key,
   code       text        not null,

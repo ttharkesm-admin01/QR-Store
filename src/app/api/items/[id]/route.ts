@@ -42,6 +42,11 @@ export async function DELETE(
     return NextResponse.json({ error: "ต้องเป็นผู้ดูแลระบบ" }, { status: 403 });
   }
   const id = Number((await ctx.params).id);
-  await deleteItem(id);
-  return NextResponse.json({ ok: true });
+  try {
+    await deleteItem(id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[items] delete error:", (err as Error).message);
+    return NextResponse.json({ error: "ลบไม่สำเร็จ" }, { status: 500 });
+  }
 }

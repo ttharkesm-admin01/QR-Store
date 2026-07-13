@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { countActiveAdmins, deactivateUser, getUserRole } from "@/lib/data";
+import { deactivateUser } from "@/lib/data";
 
 // ปิดการใช้งานผู้ใช้ (admin เท่านั้น) — ไม่ลบจริงเพื่อรักษาประวัติ
 export async function DELETE(
@@ -18,13 +18,21 @@ export async function DELETE(
       { status: 400 },
     );
   }
-  // กันปิดผู้ดูแลคนสุดท้าย (ไม่งั้นจะไม่มีใครจัดการระบบได้)
-  if ((await getUserRole(id)) === "ADMIN" && (await countActiveAdmins()) <= 1) {
-    return NextResponse.json(
-      { error: "ต้องมีผู้ดูแลอย่างน้อย 1 คน" },
-      { status: 400 },
-    );
+  try {
+    // กันปิดผู้ดูแลคนสุดท้ายไว้ใน statement เดียว (เช็คใน deactivateUser)
+    const result = await deactivateUser(id);
+    if (result === "last_admin") {
+      return NextResponse.json(
+        { error: "ต้องมีผู้ดูแลอย่างน้อย 1 คน" },
+        { status: 400 },
+      );
+    }
+    if (result === "not_found") {
+      return NextResponse.json({ error: "ไม่พบผู้ใช้" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[users] deactivate error:", (err as Error).message);
+    return NextResponse.json({ error: "ระบบขัดข้องชั่วคราว" }, { status: 500 });
   }
-  await deactivateUser(id);
-  return NextResponse.json({ ok: true });
 }

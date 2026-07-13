@@ -17,7 +17,11 @@ function toCsv(rows: MovementView[]): string {
   };
   const lines = rows.map((m) =>
     [
-      new Date(m.created_at).toLocaleString("th-TH"),
+      // route นี้รันฝั่ง server (Vercel = UTC) ต้องระบุ timezone เอง
+      // ไม่งั้นเวลาใน CSV จะเพี้ยน 7 ชม. ไม่ตรงกับที่หน้าเว็บแสดง
+      new Date(m.created_at).toLocaleString("th-TH", {
+        timeZone: "Asia/Bangkok",
+      }),
       m.item_name,
       m.item_code,
       TYPE_LABEL[m.type],
