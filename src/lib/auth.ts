@@ -115,14 +115,19 @@ export async function getSession(): Promise<Session | null> {
 }
 
 // ใช้ในหน้า/route ที่ต้องล็อกอินก่อน
-export async function requireSession(): Promise<Session> {
+// รับ path ปัจจุบันมาใส่ ?next= เพื่อให้ล็อกอินเสร็จแล้วกลับมาหน้าเดิม
+// (ไม่งั้นเปิด deep link เช่น /history ตอน session หมด แล้วเด้งไป / ทุกครั้ง)
+// ฝั่ง /login ตรวจ next ซ้ำอีกชั้นอยู่แล้ว จึงกัน open-redirect ได้
+export async function requireSession(next?: string): Promise<Session> {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) {
+    redirect(next ? `/login?next=${encodeURIComponent(next)}` : "/login");
+  }
   return session;
 }
 
-export async function requireAdmin(): Promise<Session> {
-  const session = await requireSession();
+export async function requireAdmin(next?: string): Promise<Session> {
+  const session = await requireSession(next);
   if (session.role !== "ADMIN") redirect("/");
   return session;
 }

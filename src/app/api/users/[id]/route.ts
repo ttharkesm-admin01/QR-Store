@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { deactivateUser } from "@/lib/data";
+import { errorJson, parseId } from "@/lib/http";
 
 // ปิดการใช้งานผู้ใช้ (admin เท่านั้น) — ไม่ลบจริงเพื่อรักษาประวัติ
 export async function DELETE(
@@ -11,14 +12,14 @@ export async function DELETE(
   if (!session || session.role !== "ADMIN") {
     return NextResponse.json({ error: "ต้องเป็นผู้ดูแลระบบ" }, { status: 403 });
   }
-  const id = Number((await ctx.params).id);
-  if (id === session.userId) {
-    return NextResponse.json(
-      { error: "ปิดการใช้งานบัญชีตัวเองไม่ได้" },
-      { status: 400 },
-    );
-  }
   try {
+    const id = parseId((await ctx.params).id);
+    if (id === session.userId) {
+      return NextResponse.json(
+        { error: "ปิดการใช้งานบัญชีตัวเองไม่ได้" },
+        { status: 400 },
+      );
+    }
     // กันปิดผู้ดูแลคนสุดท้ายไว้ใน statement เดียว (เช็คใน deactivateUser)
     const result = await deactivateUser(id);
     if (result === "last_admin") {
@@ -32,7 +33,6 @@ export async function DELETE(
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[users] deactivate error:", (err as Error).message);
-    return NextResponse.json({ error: "ระบบขัดข้องชั่วคราว" }, { status: 500 });
+    return errorJson("users", err, "ระบบขัดข้องชั่วคราว");
   }
 }

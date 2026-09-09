@@ -15,6 +15,20 @@ create table if not exists users (
 alter table users add column if not exists failed_logins integer not null default 0;
 alter table users add column if not exists locked_until timestamptz;
 
+-- กัน brute-force โดยไม่เปิดช่อง DoS
+-- ล็อกที่ "ผู้ใช้" อย่างเดียวไม่พอ: หน้า login โชว์รายชื่อ+id ทุกคน ใครก็ได้ (ไม่ต้องล็อกอิน)
+-- ยิง PIN ผิดคนละ 5 ครั้งเพื่อล็อกพนักงานทั้งร้านวนไปเรื่อย ๆ
+-- จึงล็อกเป็นคู่ (ip, user_id) แทน — คนร้ายล็อกได้แค่ "ตัวเอง" ส่วนพนักงานที่ร้านไม่กระทบ
+-- user_id = 0 คือแถวนับรวมทั้ง IP (กัน IP เดียวไล่ล็อกหลายบัญชี)
+create table if not exists login_throttle (
+  ip           text        not null,
+  user_id      integer     not null default 0,
+  fails        integer     not null default 0,
+  locked_until timestamptz,
+  updated_at   timestamptz not null default now(),
+  primary key (ip, user_id)
+);
+
 create table if not exists items (
   id         serial primary key,
   code       text        not null,

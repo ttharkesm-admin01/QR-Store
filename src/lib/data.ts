@@ -38,6 +38,10 @@ export class AppError extends Error {
   }
 }
 
+// ขอบบนของจำนวน — ต่ำกว่าเพดาน int4 ของ Postgres (2147483647) มาก
+// ห้องเก็บของเล็ก ๆ ไม่มีทางถึง แต่กัน payload ที่จงใจส่งเลขโตมาทำให้ pg โยน error ดิบ
+const MAX_QTY = 1_000_000;
+
 function isUniqueViolation(err: unknown): boolean {
   return (err as { code?: string })?.code === "23505";
 }
@@ -163,11 +167,14 @@ export async function updateItem(
 }
 
 // archive รายการ (เก็บประวัติการเบิกไว้)
+// คืน 404 เหมือน updateItem แทนที่จะตอบ ok เงียบ ๆ เมื่อ id ไม่มีอยู่จริง
 export async function deleteItem(id: number): Promise<void> {
-  await query(
-    `update items set active = false, updated_at = now() where id = $1`,
+  const row = await queryOne<{ id: number }>(
+    `update items set active = false, updated_at = now()
+     where id = $1 and active = true returning id`,
     [id],
   );
+  if (!row) throw new AppError("ไม่พบรายการนี้", 404);
 }
 
 // ---------- การตัดสต็อก (เบิกของ) แบบ atomic ----------
@@ -177,8 +184,10 @@ export async function withdraw(
   qty: number,
   note?: string | null,
 ): Promise<Item> {
-  if (!Number.isInteger(qty) || qty <= 0) {
-    throw new AppError("จำนวนต้องเป็นจำนวนเต็มมากกว่า 0", 400);
+  // ❗ ต้องมีขอบบนด้วย: `Number.isInteger(3e9)` เป็น true แต่เกินช่วง int4 ของ Postgres
+  // ถ้าปล่อยผ่านจะได้ error ดิบจาก pg แทนข้อความภาษาไทย
+  if (!Number.isInteger(qty) || qty <= 0 || qty > MAX_QTY) {
+    throw new AppError(`จำนวนต้องเป็นจำนวนเต็ม 1–${MAX_QTY}`, 400);
   }
   return tx(async (client) => {
     // ตัดสต็อกเฉพาะเมื่อมีของพอ + ยัง active — กันสต็อกติดลบในคำสั่งเดียว
@@ -212,8 +221,8 @@ export async function adjustStock(
   delta: number,
   note?: string | null,
 ): Promise<Item> {
-  if (!Number.isInteger(delta) || delta === 0) {
-    throw new AppError("จำนวนที่ปรับต้องไม่เป็น 0", 400);
+  if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > MAX_QTY) {
+    throw new AppError(`จำนวนที่ปรับต้องไม่เป็น 0 และไม่เกิน ${MAX_QTY}`, 400);
   }
   return tx(async (client) => {
     const upd = await client.query<Item>(

@@ -42,15 +42,23 @@ function createPool() {
   return p;
 }
 
-// cache pool ทั้ง dev และ prod เพื่อ reuse ข้าม warm invocation ของ serverless
-export const pool: Pool = globalForDb.pool ?? createPool();
-globalForDb.pool = pool;
+// ❗ ต้องสร้าง Pool แบบ lazy (ตอนใช้ครั้งแรก) ห้ามสร้างตอน import
+// ถ้าสร้างตอน import โมดูลจะ throw ตั้งแต่ evaluate เมื่อไม่มี DATABASE_URL →
+//   1) `next build` พังตอน "Collecting page data" แม้แต่ route ที่ไม่แตะ DB
+//      (เช่น /api/auth/logout ที่ import auth.ts → db.ts ตามสาย)
+//   2) ตอน runtime route handler จะโหลดไม่ทัน → try/catch ใน route ดักไม่ได้
+//      → 500 ดิบ / "This page couldn't load" แทนที่จะเป็น { error } JSON
+// cache ไว้บน globalThis ทั้ง dev/prod เพื่อ reuse ข้าม warm invocation ของ serverless
+function getPool(): Pool {
+  if (!globalForDb.pool) globalForDb.pool = createPool();
+  return globalForDb.pool;
+}
 
 // สร้างตารางอัตโนมัติครั้งแรก (idempotent) — ทำให้ deploy ขึ้นคลาวด์ได้โดยไม่ต้องรันสคริปต์ในเครื่อง
 let schemaPromise: Promise<void> | null = null;
 export function ensureSchema(): Promise<void> {
   if (!schemaPromise) {
-    schemaPromise = pool
+    schemaPromise = getPool()
       .query(SCHEMA_SQL)
       .then(() => undefined)
       .catch((err) => {
@@ -65,7 +73,7 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[],
 ): Promise<T[]> {
-  const res = await pool.query<T>(text, params as never[]);
+  const res = await getPool().query<T>(text, params as never[]);
   return res.rows;
 }
 
@@ -81,7 +89,7 @@ export async function queryOne<T extends QueryResultRow = QueryResultRow>(
 export async function tx<T>(
   fn: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     await client.query("BEGIN");
     const result = await fn(client);

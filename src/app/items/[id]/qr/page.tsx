@@ -14,8 +14,8 @@ export default async function QrPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin();
   const id = Number((await params).id);
+  await requireAdmin(`/items/${id}/qr`);
   const item = await getItemById(id);
   if (!item) notFound();
 
