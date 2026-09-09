@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession, type Role } from "@/lib/auth";
-import { AppError, createUser } from "@/lib/data";
+import { createUser } from "@/lib/data";
+import { errorJson } from "@/lib/http";
 
 // เพิ่มผู้ใช้ (admin เท่านั้น)
 export async function POST(req: Request) {
@@ -17,10 +18,6 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(user, { status: 201 });
   } catch (err) {
-    const e = err as AppError;
-    return NextResponse.json(
-      { error: e.message ?? "เพิ่มผู้ใช้ไม่สำเร็จ" },
-      { status: e.status ?? 500 },
-    );
+    return errorJson("users", err, "เพิ่มผู้ใช้ไม่สำเร็จ");
   }
 }

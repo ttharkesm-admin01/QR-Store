@@ -24,6 +24,8 @@ export default function HistoryClient({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [expired, setExpired] = useState(false);
 
   function buildQuery() {
     const p = new URLSearchParams();
@@ -39,10 +41,41 @@ export default function HistoryClient({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    // ❗ ต้องเช็ค res.ok และรูปร่างข้อมูลก่อน setRows
+    // /api/movements ตอบ { error } ได้ทั้ง 401 (session ถูกเพิกถอนกลางคัน — ตั้งใจให้เกิดได้)
+    // และ 500 ถ้าเอาไปใส่ rows ตรง ๆ จะกลายเป็น rows.map is not a function
+    // → หน้าพังเป็น "โหลดหน้าไม่สำเร็จ" ทั้งที่ SSR เพิ่ง render ตารางสำเร็จ
     fetch(`/api/movements?${buildQuery().toString()}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        // ❗ ห้ามเด้งไป /login อัตโนมัติ: ถ้า /login ยังเห็น session ว่าใช้ได้
+        // มันจะเด้งกลับมา /history แล้วได้ 401 อีก = วนไม่รู้จบ
+        // แสดงข้อความ + ลิงก์ให้ผู้ใช้กดเองแทน (ข้อมูลเดิมบนตารางยังอยู่)
+        if (r.status === 401) {
+          setExpired(true);
+          throw new Error("เซสชันหมดอายุ — กรุณาเข้าสู่ระบบอีกครั้ง");
+        }
+        const data = await r.json().catch(() => null);
+        if (!r.ok || !Array.isArray(data)) {
+          throw new Error(data?.error ?? "โหลดประวัติไม่สำเร็จ");
+        }
+        return data as MovementView[];
+      })
       .then((data) => {
-        if (!cancelled) setRows(data);
+        if (cancelled || !data) return;
+        setRows(data);
+        setError("");
+        setExpired(false);
+      })
+      .catch((e: unknown) => {
+        // เน็ตหลุด (เกิดบ่อยบนมือถือในห้องเก็บของ) — คงข้อมูลเดิมไว้ แล้วบอกผู้ใช้
+        // fetch โยน TypeError เมื่อต่อไม่ติด ซึ่ง message เป็นภาษาอังกฤษของเบราว์เซอร์
+        // ("Failed to fetch") ไม่ควรโชว์ให้ผู้ใช้ — แปลงเป็นข้อความไทยแทน
+        if (cancelled) return;
+        setError(
+          e instanceof TypeError
+            ? "เชื่อมต่อไม่ได้ — ตรวจสอบสัญญาณอินเทอร์เน็ต"
+            : ((e as Error)?.message ?? "โหลดประวัติไม่สำเร็จ"),
+        );
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
@@ -101,6 +134,20 @@ export default function HistoryClient({
           ⬇ Export CSV
         </a>
       </div>
+
+      {error && (
+        <p className="rounded-lg bg-rose-50 p-3 text-center text-sm text-rose-600">
+          {error}
+          {expired && (
+            <>
+              {" "}
+              <a href="/login?next=%2Fhistory" className="font-medium underline">
+                เข้าสู่ระบบ
+              </a>
+            </>
+          )}
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
         <table className="w-full text-left text-sm">

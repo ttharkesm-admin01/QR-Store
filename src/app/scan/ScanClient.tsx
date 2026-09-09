@@ -8,12 +8,17 @@ import type { Item } from "@/lib/data";
 type Stage = "picking" | "review" | "done";
 
 // รับได้ทั้ง URL (เช่น https://.../scan?code=A4-001) และรหัสล้วน (A4-001)
+// คืน "" = เป็น QR รวม (ไม่ได้ระบุรายการ) ให้ผู้ใช้เลือกจากลิสต์เอง
 function extractCode(text: string): string {
   const t = text.trim();
   try {
     const u = new URL(t);
     const c = u.searchParams.get("code");
     if (c) return c.trim();
+    // QR รวมเข้ารหัสเป็น "<origin>/scan" เฉย ๆ (ไม่มี ?code=) — ถ้าสแกนอันนี้
+    // ด้วยกล้อง/ถ่ายรูปจากในแอปเอง ห้ามเอาทั้ง URL ไปค้นเป็นรหัส
+    // ไม่งั้นจะได้ 404 ว่า ไม่พบรายการสำหรับรหัส "https://host/scan"
+    if (u.pathname.replace(/\/+$/, "") === "/scan") return "";
   } catch {
     /* ไม่ใช่ URL — ใช้เป็นรหัสตรง ๆ */
   }
@@ -68,8 +73,12 @@ export default function ScanClient({
   }
 
   async function lookup(raw: string) {
+    if (!raw.trim()) return; // ช่องกรอกรหัสว่าง — ไม่ต้องทำอะไร
     const code = extractCode(raw);
-    if (!code) return;
+    if (!code) {
+      setError("นี่คือ QR รวม — เลือกรายการที่จะเบิกจากลิสต์ด้านบนได้เลย");
+      return;
+    }
     setBusy(true);
     setError("");
     try {

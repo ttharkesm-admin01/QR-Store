@@ -6,7 +6,7 @@ import UsersManager from "./UsersManager";
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
-  const session = await requireAdmin();
+  const session = await requireAdmin("/users");
   const users = await listPublicUsers();
   return (
     <>

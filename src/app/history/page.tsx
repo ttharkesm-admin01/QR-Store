@@ -6,7 +6,7 @@ import HistoryClient from "./HistoryClient";
 export const dynamic = "force-dynamic";
 
 export default async function HistoryPage() {
-  const session = await requireSession();
+  const session = await requireSession("/history");
   const [rows, items, users] = await Promise.all([
     listMovements({ limit: 200 }),
     listItems(),

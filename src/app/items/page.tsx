@@ -7,7 +7,7 @@ import ItemsManager from "./ItemsManager";
 export const dynamic = "force-dynamic";
 
 export default async function ItemsPage() {
-  const session = await requireAdmin();
+  const session = await requireAdmin("/items");
   const items = await listItems();
   return (
     <>

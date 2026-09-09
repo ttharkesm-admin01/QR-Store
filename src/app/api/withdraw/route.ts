@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { AppError, getItemByCode, withdraw } from "@/lib/data";
+import { errorJson } from "@/lib/http";
 
 // เบิกของ + ตัดสต็อก — body: { code?: string, itemId?: number, quantity: number, note?: string }
 export async function POST(req: Request) {
@@ -32,10 +33,6 @@ export async function POST(req: Request) {
       message: `เบิก ${quantity} ${updated.unit} แล้ว เหลือ ${updated.quantity} ${updated.unit}`,
     });
   } catch (err) {
-    const e = err as AppError;
-    return NextResponse.json(
-      { error: e.message ?? "เบิกไม่สำเร็จ" },
-      { status: e.status ?? 500 },
-    );
+    return errorJson("withdraw", err, "เบิกไม่สำเร็จ");
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { AppError, deleteItem, updateItem } from "@/lib/data";
+import { errorJson, parseId } from "@/lib/http";
 
 export async function PATCH(
   req: Request,
@@ -10,8 +11,8 @@ export async function PATCH(
   if (!session || session.role !== "ADMIN") {
     return NextResponse.json({ error: "ต้องเป็นผู้ดูแลระบบ" }, { status: 403 });
   }
-  const id = Number((await ctx.params).id);
   try {
+    const id = parseId((await ctx.params).id);
     const b = await req.json();
     const code = String(b.code ?? "").trim();
     const name = String(b.name ?? "").trim();
@@ -25,11 +26,7 @@ export async function PATCH(
     });
     return NextResponse.json(item);
   } catch (err) {
-    const e = err as AppError;
-    return NextResponse.json(
-      { error: e.message ?? "แก้ไขไม่สำเร็จ" },
-      { status: e.status ?? 500 },
-    );
+    return errorJson("items", err, "แก้ไขไม่สำเร็จ");
   }
 }
 
@@ -41,12 +38,10 @@ export async function DELETE(
   if (!session || session.role !== "ADMIN") {
     return NextResponse.json({ error: "ต้องเป็นผู้ดูแลระบบ" }, { status: 403 });
   }
-  const id = Number((await ctx.params).id);
   try {
-    await deleteItem(id);
+    await deleteItem(parseId((await ctx.params).id));
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[items] delete error:", (err as Error).message);
-    return NextResponse.json({ error: "ลบไม่สำเร็จ" }, { status: 500 });
+    return errorJson("items", err, "ลบไม่สำเร็จ");
   }
 }

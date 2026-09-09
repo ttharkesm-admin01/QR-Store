@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 // QR รวมอันเดียว — สแกนแล้วเข้าหน้าเบิก (เลือกรายการเองจากลิสต์) ติดที่จุดเบิกจุดเดียวพอ
 export default async function UniversalQrPage() {
-  await requireAdmin();
+  await requireAdmin("/qr");
 
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";

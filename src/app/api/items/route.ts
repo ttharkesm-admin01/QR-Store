@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { AppError, createItem, listItems } from "@/lib/data";
+import { errorJson } from "@/lib/http";
 
 export async function GET() {
   const session = await getSession();
@@ -28,10 +29,6 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(item, { status: 201 });
   } catch (err) {
-    const e = err as AppError;
-    return NextResponse.json(
-      { error: e.message ?? "บันทึกไม่สำเร็จ" },
-      { status: e.status ?? 500 },
-    );
+    return errorJson("items", err, "บันทึกไม่สำเร็จ");
   }
 }
